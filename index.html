@@ -1,0 +1,145 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>CanShop-Tariff Buster</title>
+
+    <!-- Favicon (for browser tab) -->
+    <link rel="icon" type="image/png" href="canshop.png">
+
+    <!-- Apple Touch Icon (for iOS home screen) -->
+    <link rel="apple-touch-icon" sizes="180x180" href="canshop.png">
+
+    <!-- Web App Manifest for Android home screen installation -->
+    <link rel="manifest" href="manifest.json">
+    <meta name="theme-color" content="#ffffff">
+
+    <style>
+        body { text-align: center; font-family: Arial, sans-serif; }
+        video, img { width: 100%; max-width: 640px; height: 480px; display: block; margin: auto; cursor: pointer; }
+        .button {
+            background-color: green;
+            color: white;
+            padding: 10px 20px;
+            border: none;
+            cursor: pointer;
+            position: absolute;
+            top: 10px;
+            right: 10px;
+            display: none;
+        }
+        .content-block { margin-top: 20px; }
+    </style>
+</head>
+<body>
+<div style="display: flex; align-items: center; justify-content: center; width: 100%; margin-bottom: 10px; text-align: center; flex-direction: column;">
+    <img src="canshop.png" alt="CanShop Logo" style="height: 50px; width: auto; margin-bottom: 10px;">
+    <h2 style="font-weight: bold;">CanShop-Tariff Buster</h2>
+</div>
+
+<div id="before-upload" class="content-block">
+    <div style="display: flex; justify-content: center;">
+        <video id="video" autoplay playsinline></video>
+    </div>
+    <canvas id="canvas" width="640" height="480" style="display:none;"></canvas>
+</div>
+
+<div id="after-upload" class="content-block" style="display:none;">
+    <h3>Captured Image</h3>
+    <div id="preview"></div>
+    <h3 id="status">Processing...</h3>
+    <div id="result"></div>
+</div>
+
+<script>
+    const video = document.getElementById("video");
+    const canvas = document.getElementById("canvas");
+    const preview = document.getElementById("preview");
+    const result = document.getElementById("result");
+    const status = document.getElementById("status");
+
+    function startCamera() {
+    if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+        console.error("❌ Camera API is not supported in this browser.");
+        alert("Camera access is not supported in Samsung Internet. Please use Chrome or update your browser.");
+        return;
+    }
+
+    navigator.mediaDevices.getUserMedia({ video: { facingMode: 'environment' } })
+        .then(stream => {
+            video.srcObject = stream;
+            return video.play().catch(err => console.error("❌ Autoplay prevented:", err));
+        })
+        .catch(err => {
+            console.error("Camera error:", err);
+            alert("Camera access denied or unavailable. Please check permissions.");
+        });
+}
+
+
+    document.addEventListener("DOMContentLoaded", startCamera);
+
+    // ✅ Tap video stream to take a photo
+    video.addEventListener("click", captureImage);
+
+    function captureImage() {
+        const ctx = canvas.getContext("2d");
+        ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+
+        canvas.toBlob(blob => {
+            const reader = new FileReader();
+            reader.readAsDataURL(blob);
+            reader.onloadend = () => {
+                const base64Image = reader.result;
+                displayCapturedImage(base64Image);
+                sendToBackend(base64Image);
+            };
+        }, "image/jpeg");
+    }
+
+    function displayCapturedImage(imageSrc) {
+        preview.innerHTML = `<img src="${imageSrc}" alt="Captured Image" onclick="resetApp()">`;
+        document.getElementById("before-upload").style.display = "none";
+        document.getElementById("after-upload").style.display = "block";
+    }
+
+    function sendToBackend(base64Image) {
+        fetch("https://canshop-tariff-buster.onrender.com/analyze", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ image: base64Image })
+        })
+        .then(response => response.json())
+        .then(data => {
+            document.getElementById("result").innerHTML = data.message || `<p style="color:red;">Error: No message returned</p>`;
+            status.innerText = data.message ? "Done" : "Error";
+        })
+        .catch(error => {
+            console.error("❌ Error sending image to backend:", error);
+            document.getElementById("result").innerHTML = `<p style="color:red;">Fetch Error: ${error.message}</p>`;
+            status.innerText = "Error";
+        });
+    }
+
+    function resetApp() {
+        document.getElementById("before-upload").style.display = "block";
+        document.getElementById("after-upload").style.display = "none";
+        preview.innerHTML = "";
+        result.innerHTML = "";
+        status.innerText = "Processing...";
+
+        if (window.AndroidInterface) {
+            window.AndroidInterface.resetWebView();
+        } else {
+            startCamera();
+        }
+    }
+if ("serviceWorker" in navigator) {
+  navigator.serviceWorker.register("/service-worker.js")
+    .then(() => console.log("Service Worker Registered"))
+    .catch(err => console.error("Service Worker Error", err));
+}
+</script>
+</body>
+</html>
